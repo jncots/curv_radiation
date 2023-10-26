@@ -3,6 +3,7 @@ module mag_sph_m
  use vector_rot3d_m, only : vector_rot3d
  use mag_dipole_m, only : mag_dipole
  use ret_dipole_mod, only : ret_dipole
+ use phys_const, only : c_light, pi
 
 
  implicit none
@@ -11,9 +12,6 @@ module mag_sph_m
 
  public :: norm_field, mfields, rot_incl, solid_rot
  public :: mf_rlc, mf_omega
-
- real(8), parameter :: pi=3.14159265358979324d0 ! pi number
- real(8), parameter :: c_light=2.99792458d10
 
  real(8) :: bnorm=1d0, al_incl, mf_rlc, mf_omega
  real(8), parameter :: nom0(3)=[0d0,0d0,1d0] ! along z diretion
@@ -32,7 +30,7 @@ module mag_sph_m
 subroutine set_field
  integer :: i
 ! Reading data
- fd%fname='/home/anton/work/project/&
+ fd%fname='/mnt/e/work/project/&
  pulsar_escape/mag_field/data_files/CrabLowRes1.35_ri.dat'
  call fd%read
 
@@ -75,6 +73,8 @@ subroutine set_field
  mf_omega=mdip%omega
  mf_rlc=mdip%r_unit
 
+ write(*,'(A, Es14.6)') "r_surface = ", mdip%rsu
+
 ! Rotate dipole
  call rf_dip%set(1)
  call rf_dip%set_rot(1,2,90d0)
@@ -91,6 +91,7 @@ subroutine norm_field
  real(8) :: x(3), bdat(3), bdip(3), bdat0, bdip0
 
  call set_field
+
 
  x=[0d0,1d0,0d0]
  x=x/sqrt(dot_product(x,x))
@@ -128,7 +129,8 @@ function bm_dat(x)
  x1(3)=x1(3)+0.04d0
 
  call rf_dat%rotate(x1,x0)
- call fd%cfield(x0(1),x0(2),x0(3),b0)
+!  call fd%cfield(x0(1),x0(2),x0(3),b0)
+ call fd%cfield_cubic(x0(1),x0(2),x0(3),b0)
  call rf_dat%rotate_back(b0,bm_dat)
  bm_dat=bnorm*bm_dat
 
@@ -184,7 +186,6 @@ subroutine mfields(x,bmf,emf,typ)
   typ_field='dip'
  end if
 
-
  call rf_solid%rotate_back(x,x0)
  xa=sqrt(dot_product(x0,x0))
 
@@ -193,7 +194,6 @@ subroutine mfields(x,bmf,emf,typ)
 !  bm0=bm_ret(x0)
 
  else
-
   if (typ_field=='fff') then
    bm0=bm_dat(x0)
   else
@@ -202,7 +202,6 @@ subroutine mfields(x,bmf,emf,typ)
 !  bm0=bm_ret(x0)
  end if
  call rf_solid%rotate(bm0,bmf)
-
 ! If x is in light cylinder units, then
 ! knowing 'nom' - direction of rotation
 ! one can find E=-(vxB)/c as:
@@ -244,6 +243,7 @@ subroutine solid_rot(phase)
 !==========================================
  real(8), intent(in) :: phase
 
+ write(*,*) "al_incl = ", al_incl
  call rf_solid%set(2)
  call rf_solid%set_rot(1,2,al_incl)
  call rf_solid%set_rot(2,3,phase)
