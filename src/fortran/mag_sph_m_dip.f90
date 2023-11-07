@@ -30,8 +30,7 @@ module mag_sph_m
 subroutine set_field
  integer :: i
 ! Reading data
- fd%fname='/mnt/e/work/project/&
- pulsar_escape/mag_field/data_files/CrabLowRes1.35_ri.dat'
+ fd%fname='/home/antonpr/work/pulsar_rad/data_files/CrabLowRes1.35_ri.dat'
  call fd%read
 
  ! do i=1,size(fd%x)
@@ -42,6 +41,7 @@ subroutine set_field
 ! Rotate data
  call rf_dat%set(1)
  call rf_dat%set_rot(1,3,126d0)
+!  call rf_dat%set_rot(1,3,0d0)
 ! call rf_dat%set_rot(1,2,90d0)
 ! call rf_dat%set_rot(1,3,-140d0)
 ! call rf_dat%set_rot(1,3,0d0)
@@ -129,8 +129,8 @@ function bm_dat(x)
  x1(3)=x1(3)+0.04d0
 
  call rf_dat%rotate(x1,x0)
-!  call fd%cfield(x0(1),x0(2),x0(3),b0)
- call fd%cfield_cubic(x0(1),x0(2),x0(3),b0)
+ call fd%cfield(x0(1),x0(2),x0(3),b0)
+!  call fd%cfield_cubic(x0(1),x0(2),x0(3),b0)
  call rf_dat%rotate_back(b0,bm_dat)
  bm_dat=bnorm*bm_dat
 
@@ -245,7 +245,7 @@ subroutine solid_rot(phase)
 
  write(*,*) "al_incl = ", al_incl
  call rf_solid%set(2)
- call rf_solid%set_rot(1,2,al_incl)
+ call rf_solid%set_rot(1,2,0d0)
  call rf_solid%set_rot(2,3,phase)
 
 end subroutine solid_rot

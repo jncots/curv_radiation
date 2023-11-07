@@ -1,12 +1,12 @@
 module util_test
 
-  implicit none
-  private
-  save
+   implicit none
+   private
+   save
 
-public :: cwd_parent_dir
+   public :: cwd_parent_dir
 
- contains
+contains
 
 !===========================================================================
 ! FUNCTION: cwd_parent_dir
@@ -29,37 +29,37 @@ public :: cwd_parent_dir
 !
 !===========================================================================
 
- function cwd_parent_dir(level)
-    implicit none
+   function cwd_parent_dir(level)
+      implicit none
 
-    ! Input Parameters
-    integer, intent(in) :: level
+      ! Input Parameters
+      integer, intent(in) :: level
 
-    ! Output
-    character(300) :: cwd_parent_dir
-    character(300) :: cwd
-    integer :: i, idx
+      ! Output
+      character(300) :: cwd_parent_dir
+      character(300) :: cwd
+      integer :: i, idx
 
-    ! Get the current working directory
-    call getcwd(cwd)
-    cwd = trim(cwd)
+      ! Get the current working directory
+      call getcwd(cwd)
+      cwd = trim(cwd)
 
-    ! Find the index of the last character in the path
-    idx = len(cwd)
+      ! Find the index of the last character in the path
+      idx = len(cwd)
 
-    ! Move up the directory hierarchy to the specified level
-    do i = 1, level
-        idx = index(cwd(:idx), '/', .true.) - 1
-        if (idx < 1) then
+      ! Move up the directory hierarchy to the specified level
+      do i = 1, level
+         idx = index(cwd(:idx), '/', .true.) - 1
+         if (idx < 1) then
             cwd = "/"  ! Reached the root directory
             exit
-        end if
-        cwd = cwd(:idx)
-    end do
+         end if
+         cwd = cwd(:idx)
+      end do
 
-    ! Set the output variable to the parent directory path
-    cwd_parent_dir = cwd
-end function cwd_parent_dir
+      ! Set the output variable to the parent directory path
+      cwd_parent_dir = cwd
+   end function cwd_parent_dir
 
 
 end module util_test

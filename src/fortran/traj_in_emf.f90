@@ -20,7 +20,7 @@ module traj_in_emf_m
  real(8) :: bm0, rho, chi(3), rot_num, accuracy
  real(8) :: start_pos(3), start_vel(3), start_lorf
  real(8) :: u1_const, u2_const, u3_const
- real(8) :: dnde_const, ec_const, loss_const, rgc_const
+ real(8) :: dnde_const, ec_const, loss_const, rgc_const, mc2e_const
  character(2) :: field_type
  character(10) :: particle
  character(500) :: fname(4)
@@ -55,6 +55,7 @@ subroutine initiate_constants
   ec_const = ec_const*3*hbar/(2*erg_eV)
 
   rgc_const = (me_ev*erg_eV)/(e_charge*c_light)
+  mc2e_const = (me_ev*erg_eV)/(e_charge)
 
 end subroutine initiate_constants
 
@@ -81,7 +82,7 @@ subroutine em_field(xc, e_field, b_field)
   xc1 = xc/mf_rlc
 
   ! write(*,'(A, 3Es20.10)') 'xc1 = ', xc1
-  call mfields(xc1,b_field,e_field)
+  call mfields(xc1,b_field,e_field, 'fff')
   ! write(*,'(A, 3Es20.10)') 'Bfield = ', b_field
 
   e_field = [0d0, 0d0, 0d0]
@@ -115,6 +116,7 @@ subroutine motion_ode(x, y, dydx)
   ! 3rd eq: dgamma/dt = (e/mc)*(beta*E) 
   ! - 2/3(e^2/mc)(gamma^4/c2)*(dbeta/dt)^2
   dydx(7) = u2_const*vde - u3_const*dbdt2*gamma**4
+  ! dydx(7) = 0d0
 
  end subroutine motion_ode
 
@@ -131,7 +133,7 @@ subroutine rad_val(x, y, acc, loss, ec, loss_pr, acc_norm)
   gamma = y(7)
 
   ! 1st eq: dr/dt = c*beta
-  ! dydx(1:3)=u1_const*vc
+  dydx(1:3)=u1_const*vc
 
   call em_field(xc, em, bm)
   vde=dot_product(vc, em)
@@ -146,7 +148,8 @@ subroutine rad_val(x, y, acc, loss, ec, loss_pr, acc_norm)
 
   acc =  u2_const*vde
   loss = u3_const*dbdt2*gamma**4
-  dydx(7) = u2_const*vde - u3_const*dbdt2*gamma**4
+  ! dydx(7) = u2_const*vde - u3_const*dbdt2*gamma**4
+  ! dydx(7) = 0d0
 
   ! Characteristic energy in eV
   ec = ec_const*y(7)*sqrt(loss)
@@ -168,7 +171,8 @@ subroutine cond1(this)
   type(vector_ops) :: vop
   ! real(8) :: rad, vel
   ! real(8) :: dydx(6), min_vel=1d-2, min_dist=1d0*psec
-  real(8) :: min_vel=1d-2, maxvel=1d0 + 1d-5, vnorm
+  real(8) :: min_vel=1d-2, maxvel=1d0 + 1d-5, vnorm 
+  real(8) :: rg, em(3), bm(3), bm_val
   integer :: i
   integer, save :: nstep = 0
   real(8), save :: gamma_init
@@ -179,9 +183,17 @@ subroutine cond1(this)
   
   ! Stop condition:
   ! If initial gamma decreased to 0.1%
-  if (this%yc(7)/gamma_init < 1e-2) then
+  if (this%yc(7)/gamma_init < 1e-4) then
     this%stop_flag = .true.
+  end if
+  
+  call em_field(this%yc(1:3), em, bm)
+  bm_val = vop%vec_norm(bm)
+  if (bm_val < 1e0) then
+    this%stop_flag = .true.
+    write(*,*) "Magnetic field small = ", bm_val
   end if  
+  
   nstep=nstep+1
 
   ! normalize velocity
@@ -193,7 +205,13 @@ subroutine cond1(this)
   ! this%yeps_flag=.false.
   if (mod(nstep,10000)==0) then
     vnorm = vop%vec_norm(this%yc(1:3))
-  write(*,'(I10,10Es14.6)') nstep, this%xc, vnorm, this%yc(7)
+    call em_field(this%yc(1:3), em, bm)
+    bm_val = vop%vec_norm(bm)
+    rg = mc2e_const*this%yc(7)/bm_val
+    write(*,'(I10,10Es14.6)') nstep, this%xc, vnorm, this%yc(7), bm_val, &
+                              rg, rg/c_light
+
+    ! read(*,*)                          
   end if
 
 end subroutine cond1
@@ -212,16 +230,17 @@ end subroutine cond1
   call initiate_fields
   
   write(*,'(A,Es14.6)') "mf_rlc =", mf_rlc
+  ! read(*,*)
 
 
-  y(1:3)=[1d-1, 1d-1, 1d-1]*mf_rlc
+  y(1:3)=[4d-1, 4d-1, 4d-1]*mf_rlc
 
   call em_field(y(1:3), em, bm)
   y(4:6)=vop%vec_dir([1d0, 1d0, 1d0])
-  y(7) = 1d3
+  y(7) = 1d7
 
   t1 = 0d0
-  t2 = 1d4
+  t2 = 1d0
   eps = 1d-6
  
   call ode%ode_sys(ns, motion_ode)
@@ -233,7 +252,7 @@ end subroutine cond1
   call ode%add_cond(1,cond1)
   call ode%solve_ode
  
-  call sol%reduce_to_npoints(100000,sol_red) 
+  call sol%reduce_to_npoints(10000,sol_red) 
   write(*,*) "Solved with np = ", sol%np
   call write_results(sol_red)
  
@@ -248,16 +267,16 @@ end subroutine cond1
   real(8) :: acc, loss, ec, loss_pr, acc_norm
   character(500) :: fname(4)
 
-  fname(1)=trim(cwd_parent_dir(2))//'/data/traj_in_fff.dat'
+  fname(1)=trim(cwd_parent_dir(3))//'/results/data/traj_in_fff.dat'
   write(*,*) "fname = ", fname(1)
-  open(1,file=fname(1))
+  open(1, file=fname(1))
   
   do i=1,sol%np
   !  write(*,'(A,Es14.6,A,Es14.6)') "time = ", sol%y(0, i), " gamma = ", sol%y(7, i)
     call em_field(sol%y(1:3, i), em, bm)
     call rad_val(sol%y(0, i), sol%y(1:, i), acc, &
     loss, ec, loss_pr, acc_norm)
-    write(1,'(20Es14.6)') sol%y(0:7, i), ec, acc, &
+    write(1,'(20Es40.30)') sol%y(0:7, i), ec, acc, &
     loss, loss_pr, loss_pr/sol%y(7, i), sol%y(7, i)/loss, acc_norm 
   end do
   
@@ -281,7 +300,7 @@ end subroutine cond1
   character(500) :: fname(4)
 
   ngam = 100
-  call ut%grid(egam, 1d6, 1d13, ngam,'log')
+  call ut%grid(egam, 1d6, 1d18, ngam,'log')
   call ut%grid(spectr, 1d8, 1d13, ngam,'log')
 
   nc = sol%np
@@ -299,7 +318,7 @@ end subroutine cond1
 
   call int_spectr(ec, gm, tm, nc, egam, ngam, spectr)
 
-  fname(1)=trim(cwd_parent_dir(2))//'/data/spectr.dat'
+  fname(1)=trim(cwd_parent_dir(3))//'/results/data/spectr.dat'
   write(*,*) "fname = ", fname(1)
   open(1,file=fname(1))
 
@@ -319,20 +338,21 @@ end subroutine cond1
   use utools_mod, only : utools
   use util_test, only : cwd_parent_dir
   type(utools) :: ut
-  real(8) :: bmf(3), emf(3), xc(3)
+  real(8) :: bmf(3), emf(3), xc(3), cube_size
   real(8), allocatable ::xgrid(:), ygrid(:)
   integer :: ix, iy, nx, ny
   character(500) :: fname
 
   call norm_field
- call solid_rot(90d0)
+ call solid_rot(0d0)
 
- nx = 200
- ny = 200
-  call ut%grid(xgrid,-1d0,1d0,nx,'lin')
-  call ut%grid(ygrid,-1d0,1d0,ny,'lin')
+ nx = 201
+ ny = 201
+ cube_size = 2d0
+  call ut%grid(xgrid,-cube_size,cube_size,nx,'lin')
+  call ut%grid(ygrid,-cube_size,cube_size,ny,'lin')
 
-  fname = trim(cwd_parent_dir(2))//'/data/bm_test_cubic.dat'
+  fname = trim(cwd_parent_dir(3))//'/results/data/mag_field/bm_201.dat'
   open(1, file=fname)
 
   do ix=1,nx
@@ -347,6 +367,46 @@ end subroutine cond1
 !  write(*, '(A, 3Es14.6)') "emf = ", emf
 
  end subroutine show_field
+
+ subroutine show_field3d
+  ! Function for plotting field lines  
+   use mag_sph_m, only : mfields, norm_field, solid_rot
+   use utools_mod, only : utools
+   use util_test, only : cwd_parent_dir
+   type(utools) :: ut
+   real(8) :: bmf(3), emf(3), xc(3), cube_size
+   real(8), allocatable ::xgrid(:), ygrid(:), zgrid(:)
+   integer :: ix, iy, iz,  nx, ny, nz
+   character(500) :: fname
+ 
+  call norm_field
+  call solid_rot(0d0)
+ 
+  nx = 201
+  ny = 201
+  nz = 201
+  cube_size = 3d0
+   call ut%grid(xgrid,-cube_size,cube_size,nx,'lin')
+   call ut%grid(ygrid,-cube_size,cube_size,ny,'lin')
+   call ut%grid(zgrid,-cube_size,cube_size,nz,'lin')
+ 
+   fname = trim(cwd_parent_dir(3))//'/results/data/mag_field/bm_3d_dip.dat'
+   open(1, file=fname)
+ 
+   do ix=1,nx
+     do iy=1,ny
+      do iz=1,nz
+       xc = [xgrid(ix), ygrid(iy), zgrid(iz)]
+       call mfields(xc,bmf,emf)
+       write(1, *) xc, bmf
+      end do 
+     end do
+   end do    
+   close(1)
+ !  write(*, '(A, 3Es14.6)') "bmf = ", bmf
+ !  write(*, '(A, 3Es14.6)') "emf = ", emf
+ 
+  end subroutine show_field3d
 
 
  subroutine int_spectr(ec, gm, tm, nc, egam, ngam, spectr)
@@ -400,8 +460,9 @@ end subroutine cond1
 
 subroutine main_calc
 
- call calc_syst
+!  call calc_syst
 !  call show_field
+  call show_field3d
 
 end subroutine main_calc
 
