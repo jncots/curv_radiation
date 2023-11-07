@@ -1,10 +1,10 @@
 module traj_in_emf_m
    use ode_solver_m, only : ode_solution, ode_solver
    use vector_ops_mod, only : vector_ops
-   use phys_const, only : e_charge, erg_eV, c_light, me_ev, pi, mprot
-   use phys_const, only : hbar
+   use utools_mod, only : utools
+   use phys_const, only : e_charge, erg_eV, hbar, c_light, me_ev
+   use phys_const, only : pi
    use util_test, only : cwd_parent_dir
-   use mag_sph_m, only : mfields, norm_field, solid_rot, mf_rlc
    use hyper_field_m, only : hyper_field
 
 
@@ -14,33 +14,29 @@ module traj_in_emf_m
 
    public :: main_calc
 
-
-   real(8) :: rlight_cylinder
-   real(8) :: mc2, emc2, eloss, emc1
-   real(8) :: bm0_ch, rc0_ch, chi0_ch(3)
-   real(8) :: bm0, rho, chi(3), rot_num, accuracy
-   real(8) :: start_pos(3), start_vel(3), start_lorf
    real(8) :: u1_const, u2_const, u3_const
    real(8) :: dnde_const, ec_const, loss_const, rgc_const, mc2e_const
-   character(2) :: field_type
-   character(10) :: particle
-   logical :: loss_on
+   real(8) :: bfield_val
    type(hyper_field) :: hfield
+   type(vector_ops) :: vop
+   type(utools) :: ut
 
 
 contains
 
    function r_gyro(gamma, bm_field, sinp)
-      ! gamma - Lorentz factor
-      ! bm_field - module of magnetic field
-      ! sinp - pitch angle
+!================================================
+!   returns gyroradius
+!   gamma - Lorentz factor
+!   bm_field - module of magnetic field
+!   sinp - pitch angle
+!================================================
       real(8), intent(in) :: gamma, bm_field, sinp
       real(8) :: r_gyro
       r_gyro = mc2e_const*gamma/(bm_field*sinp)
    end function r_gyro
 
    subroutine initiate_constants
-      real(8) :: alpha
 !=================================================
 ! Constants for ODE system
 !=================================================
@@ -50,6 +46,8 @@ contains
       u2_const = -e_charge*c_light/(me_ev*erg_eV)
       ! (2/3)(e^2/mc)(1/c^2)
       u3_const = -u2_const*e_charge*2d0/(3d0*c_light**2)
+
+      ! write(*,*) "u1_const = ", u1_const
       ! write(*,*) "u2_const = ", u2_const
       ! write(*,*) "u3_const = ", u3_const
       ! read(*,*)
@@ -71,24 +69,11 @@ contains
 
    end subroutine initiate_constants
 
-   subroutine initiate_fields
-
-      ! call norm_field
-      ! call solid_rot(90d0)
-      ! rlight_cylinder = 1.5e7
-
-      ! write(*,'(A,Es14.6)') "rlight_cylinder = ", rlight_cylinder
-      call hfield%set_angle(10d0)
-
-
-   end subroutine initiate_fields
-
 
    subroutine em_field(xc, e_field, b_field)
       real(8), intent(in) :: xc(3)
       real(8), intent(out) :: e_field(3), b_field(3)
       real(8) :: vx, vy, tpar, bpar
-      type(vector_ops) :: vop
 
       ! write(*,'(A, 3Es20.10)') 'xc1 = ', xc1
       call hfield%field(xc(1), xc(2), vx, vy, tpar, bpar)
@@ -99,7 +84,7 @@ contains
 
       ! read(*,*)
 
-      b_field = 1d6*[vx, vy, 0d0]
+      b_field = bfield_val*[vx, vy, 0d0]
       e_field = [0d0, 0d0, 0d0]
 
    end subroutine em_field
@@ -111,7 +96,6 @@ contains
    !     real(8), intent(in) :: xc(3)
    !     real(8), intent(out) :: e_field(3), b_field(3)
    !     real(8) :: xc1(3)
-   !     type(vector_ops) :: vop
 
 
    !     xc1 = xc/mf_rlc
@@ -131,13 +115,10 @@ contains
       real(8), intent(in) :: x, y(:)
       real(8), intent(out) :: dydx(:)
       real(8) :: xc(3), vc(3), gamma, em(3), bm(3), vde, vxb(3), dbdt2
-      type(vector_ops) :: vop
 
       xc = y(1:3)
       vc = y(4:6)
       gamma = y(7)
-
-      ! write(*,*) "111vnorm = ", vop%vec_norm(y(4:6))
 
       ! 1st eq: dr/dt = c*beta
       dydx(1:3)=u1_const*vc
@@ -148,52 +129,10 @@ contains
       ! 2nd eq: dbeta/dt = e/(mc*gamma)*(E - (beta*E)*beta + [beta x B])
       dydx(4:6)=(u2_const/gamma)*(em - vde*vc + vxb)
 
-
-      ! write(*,"(A,10Es14.6)") "vc = ", vc
-      ! write(*,"(A,10Es14.6)") "bm = ", bm
-      ! write(*,"(A,10Es14.6)") "vxb = ", vxb
-      ! write(*,"(A,Es14.6)") "gamma = ", gamma
-      ! write(*,"(A,Es14.6)") "dv/dx = ", vop%vec_norm(dydx(4:6))
-
-      if (dydx(4).ne.dydx(4)) then
-         write(*,"(A,10Es14.6)") "xc = ", xc
-         write(*,"(A,10Es14.6)") "vc =", vc
-         write(*,"(A,10Es14.6)") "dydx = ", dydx
-         write(*,"(A,10Es14.6)") "bm = ", bm
-         write(*,"(A,10Es14.6)") "vxb = ", vxb
-         write(*,"(A,10Es14.6)") "gamma = ", gamma
-         read(*,*)
-      end if
-
       dbdt2 = dot_product(dydx(4:6), dydx(4:6))
       ! 3rd eq: dgamma/dt = (e/mc)*(beta*E)
       ! - 2/3(e^2/mc)(gamma^4/c2)*(dbeta/dt)^2
       dydx(7) = u2_const*vde - u3_const*dbdt2*gamma**4
-      ! dydx(7) = 0d0
-
-      if (dydx(7).ne.dydx(7)) then
-         write(*,"(A,10Es14.6)") "dydx7 = ", dydx(7)
-         write(*,"(A,10Es14.6)") "xc = ", xc
-         write(*,"(A,10Es14.6)") "vc =", vc
-         write(*,"(A,10Es14.6)") "dydx = ", dydx
-         write(*,"(A,10Es14.6)") "bm = ", bm
-         write(*,"(A,10Es14.6)") "vxb = ", vxb
-         write(*,"(A,10Es14.6)") "gamma = ", gamma
-         read(*,*)
-      end if
-
-      if (abs(gamma)>1e8) then
-         write(*,"(A,10Es14.6)") "gamma.ne.gamma = ", gamma
-         write(*,"(A,10Es14.6)") "dydx7 = ", dydx(7)
-         write(*,"(A,10Es14.6)") "xc = ", xc
-         write(*,"(A,10Es14.6)") "vc =", vc
-         write(*,"(A,10Es14.6)") "dydx = ", dydx
-         write(*,"(A,10Es14.6)") "bm = ", bm
-         write(*,"(A,10Es14.6)") "vxb = ", vxb
-         write(*,"(A,10Es14.6)") "gamma = ", gamma
-         read(*,*)
-      end if
-
 
    end subroutine motion_ode
 
@@ -203,7 +142,6 @@ contains
       real(8), intent(out) :: acc, loss, ec, loss_pr, acc_norm
       real(8) :: dydx(7), bmmod
       real(8) :: xc(3), vc(3), gamma, em(3), bm(3), vde, vxb(3), dbdt2
-      type(vector_ops) :: vop
 
       xc = y(1:3)
       vc = y(4:6)
@@ -246,7 +184,6 @@ contains
 ! Condition for fast calculation
 !================================================
       type(ode_solver) :: this
-      type(vector_ops) :: vop
       ! real(8) :: rad, vel
       ! real(8) :: dydx(6), min_vel=1d-2, min_dist=1d0*psec
       real(8) :: min_vel=1d-2, maxvel=1d0 + 1d-5, vnorm
@@ -311,44 +248,43 @@ contains
 
    end subroutine cond1
 
-
-   subroutine calc_syst
-      type(ode_solution) :: sol, sol_red
-      type(ode_solver) :: ode
-      type(vector_ops) :: vop
+   function initial_cond()
       integer, parameter :: ns=7
+      real(8) :: initial_cond(ns)
       real(8) :: y(ns)
-      real(8) :: t1, t2, eps
-      real(8) :: bm(3), em(3)
-      real(8) :: x0, y0, bpar, tpar
+      real(8) :: bm(3), em(3), gamma, rg0, cross_angle
+      real(8) :: x0, y0, bpar, tpar, yturn, ypos
       real(8) :: tpar1, bpar1, vnx, vny
       integer :: nquad
 
-      call initiate_constants
-      call initiate_fields
 
-      write(*,'(A,Es14.6)') "mf_rlc =", mf_rlc
-      ! read(*,*)
+      ! Set field parameters
+      cross_angle = 1d0
+      bfield_val = 1d6
+      call hfield%set_angle(cross_angle)
+      gamma = 1d7
+      ypos = 1d-1
+      rg0 = r_gyro(gamma, bfield_val, 1d0)
 
-      ! y0 = 1e3
-      bpar = 1e2
-      y0 = bpar*1d-6
+      ! Set starting field line
+      bpar = 1e1
+      ! Value of y at turning point
+      yturn = bpar*hfield%sint2/sqrt(hfield%cost)
+      y0 = yturn*ypos
+
+      !quadrant
       nquad = 2
       call hfield%xcoord(nquad, y0, bpar, x0, tpar)
-
-      ! x0 = -1d6
 
       y(1:3)=[x0, y0, 0d0]
 
       call em_field(y(1:3), em, bm)
-      ! y(4:6)=vop%vec_dir([1d0, 1d0, 1d0])
       bm(2) = bm(2)*(1-1e-6)
       y(4:6) = vop%vec_dir(bm)
       if (y(4) < 0) then
          y(4:6) = vop%vec_dir(-bm)
       end if
-      ! y(4:6) = vop%vec_dir([1d0, 1d0, 0d0])
-      y(7) = 1d7
+      y(7) = gamma
 
       call hfield%field(x0, y0, vnx, vny, tpar1, bpar1)
 
@@ -360,27 +296,40 @@ contains
       write(*,'(A,10Es14.6)') "bpar1=", bpar1
       write(*,'(A,10Es14.6)') "vx, vy=", vnx, vny
       write(*,'(A,10Es14.6)') "sinp", vop%ab_sin(y(4:6), bm)
-      write(*,'(A,10Es14.6)') "r_gyro=", r_gyro(y(7),1d6, 1d0)
-      write(*,'(A,10Es14.6)') "r_gyro/bpar=", r_gyro(y(7),1d6, 1d0)/bpar
+      write(*,'(A,10Es14.6)') "r_gyro=", rg0
+      write(*,'(A,10Es14.6)') "r_gyro/bpar=", rg0/bpar
       write(*,'(A,10Es14.6)') "bm=", bm
       write(*,'(A,10Es14.6)') "v=", y(4:6)
       write(*,'(A,10Es14.6)') "y=", y
       read(*,*)
 
+      initial_cond = y
+
+   end function initial_cond
+
+   subroutine calc_syst
+      type(ode_solution) :: sol, sol_red
+      type(ode_solver) :: ode
+      integer, parameter :: ns=7
+      real(8) :: y(ns)
+      real(8) :: t1, t2, eps
+
+      call initiate_constants
+      y = initial_cond()
       t1 = 0d0
       t2 = 4e2
       eps = 1d-6
 
       call ode%ode_sys(ns, motion_ode)
-      call ode%init_cond(t1,y)
+      call ode%init_cond(t1, y)
       call ode%solve_to(t2)
       call ode%sol_out_to(sol)
       call ode%toler(eps)
       call ode%init_step(1d-20)
-      call ode%add_cond(1,cond1)
+      call ode%add_cond(1, cond1)
       call ode%solve_ode
 
-      call sol%reduce_to_npoints(100000,sol_red)
+      call sol%reduce_to_npoints(100000, sol_red)
       write(*,*) "Solved with np = ", sol%np
       call write_results(sol_red)
 
@@ -406,15 +355,11 @@ contains
       start_write = .False.
 
       do i=1,sol%np
-         !  write(*,'(A,Es14.6,A,Es14.6)') "time = ", sol%y(0, i), " gamma = ", sol%y(7, i)
          call em_field(sol%y(1:3, i), em, bm)
          call rad_val(sol%y(0, i), sol%y(1:, i), acc, &
             loss, ec, loss_pr, acc_norm)
          if ((.not.start_write)&
             .and.(abs(sol%y(7, i)-sol%y(7, 1))/sol%y(7,1) > 1e-10)) then
-            ! write(*,'(A,20Es14.6)') "cond = ",&
-            !    abs(sol%y(7, i)-sol%y(7, 1))/sol%y(7,1),&
-            !    abs(sol%y(7, i)-sol%y(7, 1)), sol%y(7,1)
             start_write = .True.
          end if
 
@@ -434,8 +379,6 @@ contains
 
 
    subroutine write_int_spectr(sol)
-      use utools_mod, only : utools
-      type(utools) :: ut
       type(ode_solution) :: sol
       real(8), allocatable :: egam(:), spectr(:)
       real(8), allocatable :: ec(:), gm(:), tm(:)
@@ -479,9 +422,6 @@ contains
    subroutine show_field
       ! Function for plotting field lines
       use mag_sph_m, only : mfields, norm_field, solid_rot
-      use utools_mod, only : utools
-      use util_test, only : cwd_parent_dir
-      type(utools) :: ut
       real(8) :: bmf(3), emf(3), xc(3), cube_size
       real(8), allocatable ::xgrid(:), ygrid(:)
       integer :: ix, iy, nx, ny
@@ -515,9 +455,6 @@ contains
    subroutine show_field3d
       ! Function for plotting field lines
       use mag_sph_m, only : mfields, norm_field, solid_rot
-      use utools_mod, only : utools
-      use util_test, only : cwd_parent_dir
-      type(utools) :: ut
       real(8) :: bmf(3), emf(3), xc(3), cube_size
       real(8), allocatable ::xgrid(:), ygrid(:), zgrid(:)
       integer :: ix, iy, iz,  nx, ny, nz
@@ -601,13 +538,13 @@ contains
       res=p3*(p1/p2)*exp(-x)
    end subroutine f_synch
 
-   
+
 
 
    subroutine main_calc
 
       call calc_syst
-!  call show_field
+      !  call show_field
       ! call show_field3d
 
    end subroutine main_calc

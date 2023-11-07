@@ -141,16 +141,16 @@ contains
          b = 0
          t = 0
 
-         if ((nx.ne.nx).or.(ny.ne.ny).or.(nx**2+ny**2 > 2)&
-            .or.(nx.ne.nx).or.(ny.ne.ny)) then
-            write(*,"(A,10Es14.6)") "x=", x
-            write(*,"(A,10Es14.6)") "y=", y
-            write(*,"(A,10Es14.6)") "nx=", nx
-            write(*,"(A,10Es14.6)") "ny=", ny
-            write(*,"(A,10Es14.6)") "l1 = ", l1
-            write(*,"(A,10Es14.6)") "t = ", t
-            read(*,*)
-         end if
+         ! if ((nx.ne.nx).or.(ny.ne.ny).or.(nx**2+ny**2 > 2)&
+         !    .or.(nx.ne.nx).or.(ny.ne.ny)) then
+         !    write(*,"(A,10Es14.6)") "x=", x
+         !    write(*,"(A,10Es14.6)") "y=", y
+         !    write(*,"(A,10Es14.6)") "nx=", nx
+         !    write(*,"(A,10Es14.6)") "ny=", ny
+         !    write(*,"(A,10Es14.6)") "l1 = ", l1
+         !    write(*,"(A,10Es14.6)") "t = ", t
+         !    read(*,*)
+         ! end if
 
          return
       end if
@@ -199,22 +199,22 @@ contains
          ny = t*this%sint*l2
       end if
 
-      if ((nx.ne.nx).or.(ny.ne.ny).or.(nx**2+ny**2 > 2)&
-         .or.(nx.ne.nx).or.(ny.ne.ny)) then
-         write(*,*) "cond1", cond1
-         write(*,*) "cond2", cond2
-         write(*,*) "cond", cond
-         write(*,*) "max_y=", max_y
-         write(*,*) "y=", y
-         write(*,"(A,10Es14.6)") "l1**2=", y*(x*this%sint + y*this%cost)
-         write(*,"(A,10Es14.6)") "x=", x
-         write(*,"(A,10Es14.6)") "y=", y
-         write(*,"(A,10Es14.6)") "nx=", nx
-         write(*,"(A,10Es14.6)") "ny=", ny
-         write(*,"(A,10Es14.6)") "l1 = ", l1
-         write(*,"(A,10Es14.6)") "t = ", t
-         read(*,*)
-      end if
+      ! if ((nx.ne.nx).or.(ny.ne.ny).or.(nx**2+ny**2 > 2)&
+      !    .or.(nx.ne.nx).or.(ny.ne.ny)) then
+      !    write(*,*) "cond1", cond1
+      !    write(*,*) "cond2", cond2
+      !    write(*,*) "cond", cond
+      !    write(*,*) "max_y=", max_y
+      !    write(*,*) "y=", y
+      !    write(*,"(A,10Es14.6)") "l1**2=", y*(x*this%sint + y*this%cost)
+      !    write(*,"(A,10Es14.6)") "x=", x
+      !    write(*,"(A,10Es14.6)") "y=", y
+      !    write(*,"(A,10Es14.6)") "nx=", nx
+      !    write(*,"(A,10Es14.6)") "ny=", ny
+      !    write(*,"(A,10Es14.6)") "l1 = ", l1
+      !    write(*,"(A,10Es14.6)") "t = ", t
+      !    read(*,*)
+      ! end if
 
    end subroutine field
 
