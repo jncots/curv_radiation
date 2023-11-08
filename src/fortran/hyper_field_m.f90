@@ -9,8 +9,9 @@ module hyper_field_m
    type hyper_field
       real(8) :: theta, theta_rad, cost, sint, tant
       real(8) :: sint2, cost2, isint2, icost2
+      real(8) :: xmin_q2, ymin_q2
    contains
-      procedure :: set_angle, xcoord, field_line, field
+      procedure :: set_angle, xcoord, ycoord, field_line, field
    end type hyper_field
 
 contains
@@ -32,9 +33,51 @@ contains
       this%isint2 = 1/this%sint2
       this%icost2 = 1/this%cost2
 
+      ! Min x for b=1 and quadrant=2, i.e. in dimentional coordinates
+      ! xmin=-b*xmin_q2
+      this%xmin_q2 = 2*this%sint2*sqrt(this%cost)/this%sint
+
+      ! Min y for b=1 and quadrant=2, i.e. in dimentional coordinates
+      ! ymin=b*ymin_q2
+      this%ymin_q2 = this%sint2/sqrt(this%cost)
 
    end subroutine set_angle
 
+   subroutine ycoord(this, nquad, branch, b, x, y)
+      class(hyper_field) :: this
+      integer :: nquad, branch
+      real(8), intent(in) :: b, x
+      real(8), intent(out) :: y
+      real(8) :: xlen, llong, ymin
+
+      y = 0d0
+
+      if (nquad == 2) then
+
+         xlen = - x/(b * this%xmin_q2)
+         if (xlen < 1) then
+            write(*,*) "Error: hyper_field.ycoord: input abs(x) < abs(xmin)"
+            return
+         end if
+         llong = xlen + sqrt(xlen*xlen - 1d0)
+         ymin = b*this%ymin_q2
+
+         if (branch == 1) then
+            y = ymin/llong
+         else if (branch == 2) then
+            y = ymin*llong
+         else
+            write(*,*) "Error: hyper_field.ycoord: branch &
+               takes only 1(lower branch) or 2(upper branch) values"
+            return
+         end if
+
+      else
+         write(*,*) "hyper_field.ycoord: QUADRANT != 2 is not IMPLEMENTED!!!"
+         return
+      end if
+
+   end subroutine ycoord
 
    subroutine xcoord(this, nquad, y, b, x, t)
       class(hyper_field) :: this

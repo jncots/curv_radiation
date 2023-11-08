@@ -184,15 +184,13 @@ contains
 ! Condition for fast calculation
 !================================================
       type(ode_solver) :: this
-      ! real(8) :: rad, vel
-      ! real(8) :: dydx(6), min_vel=1d-2, min_dist=1d0*psec
-      real(8) :: min_vel=1d-2, maxvel=1d0 + 1d-5, vnorm
+      real(8) :: maxvel=1d0 + 1d-5, vnorm, rnorm
       real(8) :: rg, em(3), bm(3), bm_val
       real(8) :: acc, loss, ec, loss_pr, acc_norm
       integer :: i
       integer, save :: nstep = 0
       real(8), save :: gamma_init
-      real(8), save :: ec_max = 0
+      real(8), save :: ec_max = 0, ec_min = 0
 
       if (nstep == 0) then
          gamma_init = this%yc(7)
@@ -215,9 +213,7 @@ contains
 
       ! normalize velocity
       vnorm = vop%vec_norm(this%yc(4:6))
-      ! write(*,*) "vnorm = ",  vnorm
       if (vnorm > maxvel) then
-         write(*,*) "vnorm = ",  vnorm
          this%yc(4:6) = this%yc(4:6)/vnorm
       end if
 
@@ -226,21 +222,28 @@ contains
 
       if (ec > ec_max) then
          ec_max = ec
+         ec_min = ec_max
+      else
+         if (ec < ec_min) then
+            ec_min = ec
+         end if
       end if
 
-      if (ec < 1e-4*ec_max) then
+
+      if (ec < ec_max*1d-5) then
          this%stop_flag = .true.
          write(*,'(A,10Es14.6)') "ec = ", ec
          write(*,'(A,10Es14.6)') "ec_max = ", ec_max
+         write(*,'(A,10Es14.6)') "ec_min = ", ec_min
       end if
 
       ! this%yeps_flag=.false.
-      if (mod(nstep,10000)==0) then
-         vnorm = vop%vec_norm(this%yc(1:3))
+      if (mod(nstep,1000000)==0) then
+         rnorm = vop%vec_norm(this%yc(1:3))
          call em_field(this%yc(1:3), em, bm)
          bm_val = vop%vec_norm(bm)
          rg = mc2e_const*this%yc(7)/bm_val
-         write(*,'(I10,10Es14.6)') nstep, this%xc, vnorm, this%yc(7), bm_val, &
+         write(*,'(I10,10Es14.6)') nstep, this%xc, rnorm, this%yc(7), ec, &
             rg, rg/c_light
 
          ! read(*,*)
@@ -248,80 +251,113 @@ contains
 
    end subroutine cond1
 
-   function initial_cond()
-      integer, parameter :: ns=7
-      real(8) :: initial_cond(ns)
-      real(8) :: y(ns)
-      real(8) :: bm(3), em(3), gamma, rg0, cross_angle
-      real(8) :: x0, y0, bpar, tpar, yturn, ypos
-      real(8) :: tpar1, bpar1, vnx, vny
-      integer :: nquad
 
+   subroutine calculate_trajectory
+      integer, parameter :: ns=7
+      real(8) :: y0(ns)
+      integer :: nquad, branch
+      real(8) :: gamma, cross_angle
+      real(8) :: rmin, xstart
+
+      ! Initial Lorentz factor
+      gamma = 1d6
 
       ! Set field parameters
-      cross_angle = 1d0
-      bfield_val = 1d6
-      call hfield%set_angle(cross_angle)
-      gamma = 1d7
-      ypos = 1d-1
-      rg0 = r_gyro(gamma, bfield_val, 1d0)
-
-      ! Set starting field line
-      bpar = 1e1
-      ! Value of y at turning point
-      yturn = bpar*hfield%sint2/sqrt(hfield%cost)
-      y0 = yturn*ypos
-
       !quadrant
       nquad = 2
-      call hfield%xcoord(nquad, y0, bpar, x0, tpar)
+      ! Crossing angle in degrees
+      cross_angle = 10d0
+      ! Magnetic field strength
+      bfield_val = 1d6
 
-      y(1:3)=[x0, y0, 0d0]
+      ! Set starting field line
+      ! Semi-major axis
+      rmin= 1e8
+      branch = 1
+      ! Starting position
+      xstart = -rmin*1d2
+
+      call initiate_constants
+      y0 = initial_cond(gamma, cross_angle, nquad, branch, rmin, xstart)
+      call calc_syst(y0)
+
+   end subroutine calculate_trajectory
+
+   function initial_cond(gamma, cross_angle, nquad, branch, rmin, xstart)
+      real(8), intent(in) :: gamma, cross_angle, rmin, xstart
+      integer, intent(in) :: nquad, branch
+      integer, parameter :: ns=7
+      real(8) :: initial_cond(ns)
+      real(8) :: y(ns), ystart
+      real(8) :: bm(3), em(3)
+
+      call hfield%set_angle(cross_angle)
+      call hfield%ycoord(nquad, branch, rmin, xstart, ystart)
+      y(1:3)=[xstart, ystart, 0d0]
 
       call em_field(y(1:3), em, bm)
       bm(2) = bm(2)*(1-1e-6)
       y(4:6) = vop%vec_dir(bm)
+
+      ! Change direction of velocity, so that
+      ! vx > 0, i.e. directed towards
+      ! center of coordinates
       if (y(4) < 0) then
          y(4:6) = vop%vec_dir(-bm)
       end if
       y(7) = gamma
-
-      call hfield%field(x0, y0, vnx, vny, tpar1, bpar1)
-
-      write(*,'(A,10Es14.6)') "x0=", x0
-      write(*,'(A,10Es14.6)') "y0=", y0
-      write(*,'(A,10Es14.6)') "tpar=", tpar
-      write(*,'(A,10Es14.6)') "tpar1=", tpar1
-      write(*,'(A,10Es14.6)') "bpar=", bpar
-      write(*,'(A,10Es14.6)') "bpar1=", bpar1
-      write(*,'(A,10Es14.6)') "vx, vy=", vnx, vny
-      write(*,'(A,10Es14.6)') "sinp", vop%ab_sin(y(4:6), bm)
-      write(*,'(A,10Es14.6)') "r_gyro=", rg0
-      write(*,'(A,10Es14.6)') "r_gyro/bpar=", rg0/bpar
-      write(*,'(A,10Es14.6)') "bm=", bm
-      write(*,'(A,10Es14.6)') "v=", y(4:6)
-      write(*,'(A,10Es14.6)') "y=", y
-      read(*,*)
-
       initial_cond = y
+
+      ! Print setup info
+      call setup_info(nquad, rmin, xstart, ystart, gamma, bm, y)
 
    end function initial_cond
 
-   subroutine calc_syst
+
+   subroutine setup_info(nquad, rmin, xstart, ystart, gamma, bm, y)
+      integer, intent(in) :: nquad
+      real(8), intent(in) :: rmin, xstart, ystart, gamma, bm(3), y(7)
+      real(8) :: xstart_test, tpar, rg0
+      real(8) :: nbx, nby, tpar_test, rmin_test
+
+      call hfield%xcoord(nquad, ystart, rmin, xstart_test, tpar)
+      rg0 = r_gyro(gamma, bfield_val, 1d0)
+      call hfield%field(xstart, ystart, nbx, nby, tpar_test, rmin_test)
+
+      ! write(*,'(A,10Es14.6)') "xmin=", -bpar*hfield%xmin_q2
+      ! write(*,'(A,10Es14.6)') "x0=", x0
+      write(*,'(A,10Es14.6)') "gamma =", gamma
+      write(*,'(A,10Es14.6)') "xstart =", xstart
+      write(*,'(A,10Es14.6)') "ystart =", ystart
+      write(*,'(A,10Es14.6)') "rmin=", rmin
+      ! write(*,'(A,10Es14.6)') "bpar1=", bpar1
+      ! write(*,'(A,10Es14.6)') "tpar=", tpar
+      ! write(*,'(A,10Es14.6)') "tpar1=", tpar1
+      write(*,'(A,10Es14.6)') "rg0 =", rg0
+      write(*,'(A,10Es14.6)') "rg0/rmin =", rg0/rmin
+      write(*,*) "\n-----"
+      ! write(*,'(A,10Es14.6)') "nbx, nby =", nbx, nby
+      ! write(*,'(A,10Es14.6)') "bm=", bm
+      ! write(*,'(A,10Es14.6)') "v =", y(4:6)
+      ! write(*,'(A,10Es14.6)') "sin(pitch_angle) =", vop%ab_sin(y(4:6), bm)
+      ! write(*,'(A,10Es14.6)') "y =", y
+      ! read(*,*)
+
+   end subroutine setup_info
+
+   subroutine calc_syst(y0)
       type(ode_solution) :: sol, sol_red
       type(ode_solver) :: ode
       integer, parameter :: ns=7
-      real(8) :: y(ns)
+      real(8), intent(in) :: y0(ns)
       real(8) :: t1, t2, eps
 
-      call initiate_constants
-      y = initial_cond()
       t1 = 0d0
       t2 = 4e2
       eps = 1d-6
 
       call ode%ode_sys(ns, motion_ode)
-      call ode%init_cond(t1, y)
+      call ode%init_cond(t1, y0)
       call ode%solve_to(t2)
       call ode%sol_out_to(sol)
       call ode%toler(eps)
@@ -329,24 +365,24 @@ contains
       call ode%add_cond(1, cond1)
       call ode%solve_ode
 
-      call sol%reduce_to_npoints(100000, sol_red)
       write(*,*) "Solved with np = ", sol%np
-      call write_results(sol_red)
-
+      ! call sol%reduce_to_npoints(100000, sol_red)
+      ! call write_results(sol)
 
    end subroutine calc_syst
 
 
    subroutine write_results(sol)
       integer :: i
-      type(ode_solution) :: sol
+      type(ode_solution), intent(in) :: sol
+      type(ode_solution) :: sol_red
       real(8) :: bm(3), em(3)
       real(8) :: acc, loss, ec, loss_pr, acc_norm
       character(500) :: fname(4)
       logical :: start_write
 
       fname(1)=trim(cwd_parent_dir(3))//'/results/data/traj_in_fff.dat'
-      write(*,*) "fname = ", fname(1)
+      write(*,*) "Trajectory saved in = ", trim(fname(1))
       open(1, file=fname(1))
 
       write(1,'(A1, A39, 20A40)') "#", "Time", "X", "Y", "Z", "VX", "VY", "VZ", "Gamma",&
@@ -354,6 +390,7 @@ contains
          "Char loss time", "Acceleration=nu*sqrt(...)"
       start_write = .False.
 
+      call sol_red%set(sol%nsys)
       do i=1,sol%np
          call em_field(sol%y(1:3, i), em, bm)
          call rad_val(sol%y(0, i), sol%y(1:, i), acc, &
@@ -366,13 +403,13 @@ contains
          if (start_write) then
             write(1,'(20Es40.30)') sol%y(0:7, i), ec, acc, &
                loss, loss_pr, loss_pr/sol%y(7, i), sol%y(7, i)/loss, acc_norm
+            call sol_red%add_res(sol%y(0,i),sol%y(1:,i))
          end if
       end do
 
       close(1)
-      write(*, *) "Total points = ", sol%np
-
-      call write_int_spectr(sol)
+      write(*, *) "Saved points = ", sol_red%np
+      call write_int_spectr(sol_red)
 
 
    end subroutine write_results
@@ -406,7 +443,7 @@ contains
       call int_spectr(ec, gm, tm, nc, egam, ngam, spectr)
 
       fname(1)=trim(cwd_parent_dir(3))//'/results/data/spectr.dat'
-      write(*,*) "fname = ", fname(1)
+      write(*,*) "Spectrum saved in = ", trim(fname(1))
       open(1,file=fname(1))
 
       do i = 1, ngam
@@ -507,12 +544,13 @@ contains
             xc = egam(iegam)/ec(iec)
             call f_synch(xc, fsyn)
             fsyn = fsyn/(xc*gm(iec)**2)
+            if (fsyn /= fsyn) continue
             if (iec.ne.nc) then
                res_step =  fsyn*(tm(iec+1) - tm(iec))
             else
                res_step = fsyn*(tm(iec) - tm(iec-1))
             end if
-            if (res_step == res_step) res = res + res_step
+            res = res + res_step
          end do
          spectr(iegam) = res
       end do
@@ -543,7 +581,7 @@ contains
 
    subroutine main_calc
 
-      call calc_syst
+      call calculate_trajectory
       !  call show_field
       ! call show_field3d
 
