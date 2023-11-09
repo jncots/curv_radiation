@@ -12,6 +12,7 @@ module hyper_field_m
       real(8) :: xmin_q2, ymin_q2
    contains
       procedure :: set_angle, xcoord, ycoord, field_line, field
+      procedure :: field_ypoint
    end type hyper_field
 
 contains
@@ -260,6 +261,113 @@ contains
       ! end if
 
    end subroutine field
+
+   subroutine field_ypoint(this, x, y, nx, ny, t, b)
+      class(hyper_field) :: this
+      real(8), intent(in) :: x, y
+      real(8), intent(out) :: nx, ny, t, b
+      real(8) :: max_y, l1, l2, it, t2, it2
+      logical :: cond1, cond2, cond
+
+      if (abs(y) < 1d-16) then
+         nx = 1
+         ny = 0
+         t = 0
+         b = 0
+         return
+      end if
+
+      if ((abs(y*(x*this%sint + y*this%cost)) < 1d-16)&
+         .or.(abs((x*this%tant + y)) < 1d-16)) then
+         l1 = 1d0/sqrt(x**2 + y**2)
+         nx = x*l1
+         ny = y*l1
+         b = 0
+         t = 0
+
+         ! if ((nx.ne.nx).or.(ny.ne.ny).or.(nx**2+ny**2 > 2)&
+         !    .or.(nx.ne.nx).or.(ny.ne.ny)) then
+         !    write(*,"(A,10Es14.6)") "x=", x
+         !    write(*,"(A,10Es14.6)") "y=", y
+         !    write(*,"(A,10Es14.6)") "nx=", nx
+         !    write(*,"(A,10Es14.6)") "ny=", ny
+         !    write(*,"(A,10Es14.6)") "l1 = ", l1
+         !    write(*,"(A,10Es14.6)") "t = ", t
+         !    read(*,*)
+         ! end if
+
+         return
+      end if
+
+      max_y = -x*this%tant
+      cond1 = (y > max_y).and.(y < 0)
+      cond2 = (y < max_y).and.(y > 0)
+      ! cond = cond1.or.cond2
+      cond = cond2
+
+      if (this%tant < 0) then
+         cond = .not.cond
+      end if
+
+      ! Field in 2nd and 4th quadrant
+
+      if  (y < 0) then
+         nx = 1
+         ny = 0
+         t = 0
+         b = 0
+      else if (cond) then
+         l1 = sqrt(-y*(x*this%sint + y*this%cost))
+         b = l1*this%isint2
+
+         t = y/l1
+         it = 1d0/t
+         t2 = t*t
+         it2 = it*it
+
+         l2 = 1d0/sqrt(t2 + it2 - 2*this%cost)
+         nx = (it - t*this%cost)*l2
+         ny = t*this%sint*l2
+
+         ! if ((nx.ne.nx).or.(ny.ne.ny).or.(nx**2+ny**2 > 2)) then
+         !    write(*,"(A,10Es14.6)") "x=", x
+         !    write(*,"(A,10Es14.6)") "y=", y
+         !    write(*,"(A,10Es14.6)") "l1 = ", l1
+         !    write(*,"(A,10Es14.6)") "t = ", t
+         ! end if
+      else
+         ! Field in 1st and 3rd quadrant
+         l1 = sqrt(y*(x*this%sint + y*this%cost))
+         b = l1*this%icost2
+
+         t = y/l1
+         it = 1d0/t
+         t2 = t*t
+         it2 = it*it
+
+         l2 = 1d0/sqrt(t2 + it2 + 2*this%cost)
+         nx = -(it + t*this%cost)*l2
+         ny = t*this%sint*l2
+      end if
+
+      ! if ((nx.ne.nx).or.(ny.ne.ny).or.(nx**2+ny**2 > 2)&
+      !    .or.(nx.ne.nx).or.(ny.ne.ny)) then
+      !    write(*,*) "cond1", cond1
+      !    write(*,*) "cond2", cond2
+      !    write(*,*) "cond", cond
+      !    write(*,*) "max_y=", max_y
+      !    write(*,*) "y=", y
+      !    write(*,"(A,10Es14.6)") "l1**2=", y*(x*this%sint + y*this%cost)
+      !    write(*,"(A,10Es14.6)") "x=", x
+      !    write(*,"(A,10Es14.6)") "y=", y
+      !    write(*,"(A,10Es14.6)") "nx=", nx
+      !    write(*,"(A,10Es14.6)") "ny=", ny
+      !    write(*,"(A,10Es14.6)") "l1 = ", l1
+      !    write(*,"(A,10Es14.6)") "t = ", t
+      !    read(*,*)
+      ! end if
+
+   end subroutine field_ypoint
 
 
 end module hyper_field_m

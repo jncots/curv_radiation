@@ -99,7 +99,7 @@ contains
       character(500) :: fname
 
 
-      theta = 30d0
+      theta = 120d0
       call hfield%set_angle(theta)
 
       nx = 100
@@ -112,12 +112,12 @@ contains
       call ut%grid(xgrid, xmin, xmax, nx, 'lin')
       call ut%grid(ygrid, ymin, ymax, ny, 'lin')
 
-      fname = trim(cwd_parent_dir(3))//'/results/data/hyper_vfield.dat'
+      fname = trim(cwd_parent_dir(3))//'/results/data/hyper_vfield_y.dat'
       open(1,file=fname)
 
       do i = 1, nx
          do j = 1, ny
-            call hfield%field(xgrid(i), ygrid(j), vx, vy, t, b)
+            call hfield%field_ypoint(xgrid(i), ygrid(j), vx, vy, t, b)
             write(1, *) xgrid(i), ygrid(j), vx, vy, t, b
          end do
       end do
