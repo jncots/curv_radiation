@@ -17,9 +17,11 @@ module traj_in_emf_m
    real(8) :: u1_const, u2_const, u3_const
    real(8) :: dnde_const, ec_const, loss_const, rgc_const, mc2e_const
    real(8) :: bfield_val
+   real(8) :: ec_min0, ec_max0
    type(hyper_field) :: hfield
    type(vector_ops) :: vop
    type(utools) :: ut
+   integer :: nstep_cond = 0
 
 
 contains
@@ -187,13 +189,16 @@ contains
       real(8) :: maxvel=1d0 + 1d-5, vnorm, rnorm
       real(8) :: rg, em(3), bm(3), bm_val
       real(8) :: acc, loss, ec, loss_pr, acc_norm
-      integer :: i
       integer, save :: nstep = 0
       real(8), save :: gamma_init
       real(8), save :: ec_max = 0, ec_min = 0
 
-      if (nstep == 0) then
+      if (nstep_cond == 0) then
+         nstep = 0
+         ec_max = 0
+         ec_min = 0
          gamma_init = this%yc(7)
+         nstep_cond = 1
       end if
 
       ! Stop condition:
@@ -232,6 +237,8 @@ contains
 
       if (ec < ec_max*1d-5) then
          this%stop_flag = .true.
+         ec_min0 = ec_min
+         ec_max0 = ec_max
          write(*,'(A,10Es14.6)') "ec = ", ec
          write(*,'(A,10Es14.6)') "ec_max = ", ec_max
          write(*,'(A,10Es14.6)') "ec_min = ", ec_min
@@ -257,10 +264,14 @@ contains
       real(8) :: y0(ns)
       integer :: nquad, branch
       real(8) :: gamma, cross_angle
-      real(8) :: rmin, xstart
+      real(8) :: rmin, xstart, r1, r2
+      integer :: i, nrmin, lunit
+      real(8), allocatable :: rmin_grid(:)
+      character(500) :: fname
+
 
       ! Initial Lorentz factor
-      gamma = 1d6
+      gamma = 3d6
 
       ! Set field parameters
       !quadrant
@@ -271,15 +282,31 @@ contains
       bfield_val = 1d6
 
       ! Set starting field line
-      ! Semi-major axis
-      rmin= 1e8
       branch = 1
-      ! Starting position
-      xstart = -rmin*1d2
 
-      call initiate_constants
-      y0 = initial_cond(gamma, cross_angle, nquad, branch, rmin, xstart)
-      call calc_syst(y0)
+      nrmin = 100
+      r1 = 1d0
+      r2 = 1d8
+      call ut%grid(rmin_grid, r1, r2, nrmin, "log")
+
+      fname=trim(cwd_parent_dir(3))//'/results/data/ec_max_g3e6_a10.dat'
+      lunit = 77
+      open(lunit, file = fname)
+
+
+      do i=1,nrmin
+         ! Semi-major axis
+         rmin = rmin_grid(i)
+         ! Starting position
+         xstart = -rmin*1d2
+
+         call initiate_constants
+         y0 = initial_cond(gamma, cross_angle, nquad, branch, rmin, xstart)
+         call calc_syst(y0)
+         ! write(lunit,"(10(A,Es14.6))") "rmin=", rmin, " ecmin=", ec_min0, " ecmax=", ec_max0
+         write(lunit,*) rmin, ec_min0, ec_max0
+      end do
+      close(lunit)
 
    end subroutine calculate_trajectory
 
@@ -352,6 +379,8 @@ contains
       real(8), intent(in) :: y0(ns)
       real(8) :: t1, t2, eps
 
+      nstep_cond = 0
+      write(*,*) "nstep_cond = ", nstep_cond
       t1 = 0d0
       t2 = 4e2
       eps = 1d-6
