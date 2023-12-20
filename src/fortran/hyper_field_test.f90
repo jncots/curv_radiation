@@ -112,7 +112,7 @@ contains
       call ut%grid(xgrid, xmin, xmax, nx, 'lin')
       call ut%grid(ygrid, ymin, ymax, ny, 'lin')
 
-      fname = trim(cwd_parent_dir(3))//'/results/data/hyper_vfield_y.dat'
+      fname = trim(cwd_parent_dir(3))//'/results/03_test_ypoint_field/ypoint_vector_field.dat'
       open(1,file=fname)
 
       do i = 1, nx
@@ -125,12 +125,49 @@ contains
    end subroutine test_field
 
 
+   subroutine test_yfield
+      ! Output vector field of y-point field
+      type(utools) :: ut
+      type(hyper_field) :: hfield
+      real(8), allocatable :: xgrid(:), ygrid(:)
+      real(8) :: theta, vx, vy, t, b
+      real(8) :: xmin, xmax, ymin, ymax
+      integer :: i, j, nx, ny
+      character(500) :: fname
+
+
+      theta = 30d0
+      call hfield%set_angle(theta)
+
+      nx = 100
+      ny = 100
+      xmin = -10
+      xmax = 10
+      ymin = -10
+      ymax = 10
+
+      call ut%grid(xgrid, xmin, xmax, nx, 'lin')
+      call ut%grid(ygrid, ymin, ymax, ny, 'lin')
+
+      fname = trim(cwd_parent_dir(3))//'/results/data/03_test_ypoint_field/ypoint_vector_field.dat'
+      open(1,file=fname)
+
+      do i = 1, nx
+         do j = 1, ny
+            call hfield%field_ypoint(xgrid(i), ygrid(j), vx, vy, t, b)
+            write(1, *) xgrid(i), ygrid(j), vx, vy, t, b
+         end do
+      end do
+
+   end subroutine test_yfield
+
+
 
    subroutine main_calc
 
       !   call test_field_lines
       !   call test_xcoord
-      call test_field
+      call test_yfield
 
    end subroutine main_calc
 

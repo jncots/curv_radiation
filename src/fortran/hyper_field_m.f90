@@ -266,10 +266,16 @@ contains
       class(hyper_field) :: this
       real(8), intent(in) :: x, y
       real(8), intent(out) :: nx, ny, t, b
-      real(8) :: max_y, l1, l2, it, t2, it2
+      real(8) :: on_asymptote2, l1, l2, it, t2, it2
       logical :: cond1, cond2, cond
 
-      if (abs(y) < 1d-16) then
+      ! The same code as for "field" function
+      ! except y < 0 has nx = 1, ny = 0
+
+      ! If points on asymptote y = 0
+      ! or below y = 0
+      ! (y < 0d0) is the only difference from "field" function
+      if ((abs(y) < 1d-16).or.(y < 0d0)) then
          nx = 1
          ny = 0
          t = 0
@@ -277,6 +283,10 @@ contains
          return
       end if
 
+      ! The below code for points y >= 0
+      ! If points on asymptote y = -x*tg(theta)
+      ! TODO: check if it enought to use
+      ! abs(x*this%sint + y*this%cost) < 1d-16 condition
       if ((abs(y*(x*this%sint + y*this%cost)) < 1d-16)&
          .or.(abs((x*this%tant + y)) < 1d-16)) then
          l1 = 1d0/sqrt(x**2 + y**2)
@@ -284,39 +294,24 @@ contains
          ny = y*l1
          b = 0
          t = 0
-
-         ! if ((nx.ne.nx).or.(ny.ne.ny).or.(nx**2+ny**2 > 2)&
-         !    .or.(nx.ne.nx).or.(ny.ne.ny)) then
-         !    write(*,"(A,10Es14.6)") "x=", x
-         !    write(*,"(A,10Es14.6)") "y=", y
-         !    write(*,"(A,10Es14.6)") "nx=", nx
-         !    write(*,"(A,10Es14.6)") "ny=", ny
-         !    write(*,"(A,10Es14.6)") "l1 = ", l1
-         !    write(*,"(A,10Es14.6)") "t = ", t
-         !    read(*,*)
-         ! end if
-
          return
       end if
 
-      max_y = -x*this%tant
-      cond1 = (y > max_y).and.(y < 0)
-      cond2 = (y < max_y).and.(y > 0)
-      ! cond = cond1.or.cond2
-      cond = cond2
+      on_asymptote2 = x*this%sint + y*this%cost
+      ! Note on_asymptote2 = 0 is already processed above
+      ! Points in 4th quadrant
+      cond1 = (on_asymptote2 > 0).and.(y < 0)
+      ! Points in 2nd quadrant
+      cond2 = (on_asymptote2 < 0).and.(y > 0)
+      cond = cond1.or.cond2
 
-      if (this%tant < 0) then
+      if (this%cost < 0) then
          cond = .not.cond
       end if
 
       ! Field in 2nd and 4th quadrant
-
-      if  (y < 0) then
-         nx = 1
-         ny = 0
-         t = 0
-         b = 0
-      else if (cond) then
+      ! Actually, only 2nd, as 4th has y < 0
+      if (cond) then
          l1 = sqrt(-y*(x*this%sint + y*this%cost))
          b = l1*this%isint2
 
@@ -328,15 +323,9 @@ contains
          l2 = 1d0/sqrt(t2 + it2 - 2*this%cost)
          nx = (it - t*this%cost)*l2
          ny = t*this%sint*l2
-
-         ! if ((nx.ne.nx).or.(ny.ne.ny).or.(nx**2+ny**2 > 2)) then
-         !    write(*,"(A,10Es14.6)") "x=", x
-         !    write(*,"(A,10Es14.6)") "y=", y
-         !    write(*,"(A,10Es14.6)") "l1 = ", l1
-         !    write(*,"(A,10Es14.6)") "t = ", t
-         ! end if
       else
          ! Field in 1st and 3rd quadrant
+         ! Actually, only 1st, as 3rd has y < 0
          l1 = sqrt(y*(x*this%sint + y*this%cost))
          b = l1*this%icost2
 
@@ -349,24 +338,6 @@ contains
          nx = -(it + t*this%cost)*l2
          ny = t*this%sint*l2
       end if
-
-      ! if ((nx.ne.nx).or.(ny.ne.ny).or.(nx**2+ny**2 > 2)&
-      !    .or.(nx.ne.nx).or.(ny.ne.ny)) then
-      !    write(*,*) "cond1", cond1
-      !    write(*,*) "cond2", cond2
-      !    write(*,*) "cond", cond
-      !    write(*,*) "max_y=", max_y
-      !    write(*,*) "y=", y
-      !    write(*,"(A,10Es14.6)") "l1**2=", y*(x*this%sint + y*this%cost)
-      !    write(*,"(A,10Es14.6)") "x=", x
-      !    write(*,"(A,10Es14.6)") "y=", y
-      !    write(*,"(A,10Es14.6)") "nx=", nx
-      !    write(*,"(A,10Es14.6)") "ny=", ny
-      !    write(*,"(A,10Es14.6)") "l1 = ", l1
-      !    write(*,"(A,10Es14.6)") "t = ", t
-      !    read(*,*)
-      ! end if
-
    end subroutine field_ypoint
 
 
