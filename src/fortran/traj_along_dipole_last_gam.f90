@@ -1,3 +1,28 @@
+!*************************************************************************
+!      Calculation of final Lorentz factor at the light cylinder
+!      for the electron launched from polar cap
+!*************************************************************************
+! Author     : Anton Prosekin
+! Date       : 2023-12-20
+! Description:
+!   Calculation of final Lorentz factor at the light cylinder
+!   for the electron launched from polar cap. The propagation is in the
+!   dipole magnetic field
+! Usage:
+!
+! Notes:
+!   This is the copy of the file "traj_along_dipole.f90" with modifications
+!   so that only "write(1, "(10Es14.6)") gam(i), gam1" line is for output
+!
+!
+! Log:
+!   Date       | Modification Description
+!   -----------|-------------------------------------
+!   YYYY-MM-DD | Initial version created
+!
+!*************************************************************************
+
+
 module traj_in_emf_m
    use ode_solver_m, only : ode_solution, ode_solver
    use vector_ops_mod, only : vector_ops

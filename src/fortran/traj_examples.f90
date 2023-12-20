@@ -1,3 +1,26 @@
+!*************************************************************************
+!      Calculation trajectories in Y-point field
+!*************************************************************************
+! Author     : Anton Prosekin
+! Date       : 2023-12-20
+! Description:
+!    I need to output trajectories with directions of velocity
+!    * plot trajectories
+!    * plot direction of radiation
+!    * plot max point of ec
+!    * plot ec evolution
+! Usage:
+!
+! Notes:
+!
+!
+! Log:
+!   Date       | Modification Description
+!   -----------|-------------------------------------
+!   2023-12-20 | Initial version created
+!
+!*************************************************************************
+
 module traj_in_emf_m
    use ode_solver_m, only : ode_solution, ode_solver
    use vector_ops_mod, only : vector_ops
@@ -18,6 +41,7 @@ module traj_in_emf_m
    real(8) :: dnde_const, ec_const, loss_const, rgc_const, mc2e_const
    real(8) :: bfield_val
    real(8) :: ec_min0, ec_max0
+   character(500) :: traj_file_name, spectrum_file_name
    type(hyper_field) :: hfield
    type(vector_ops) :: vop
    type(utools) :: ut
@@ -25,6 +49,12 @@ module traj_in_emf_m
 
 
 contains
+
+
+   function root_out_dir()
+      character(500) :: root_out_dir
+      root_out_dir = trim(cwd_parent_dir(3))//'/results/data/05_traj_examples_ypoint/'
+   end function root_out_dir
 
    function r_gyro(gamma, bm_field, sinp)
 !================================================
@@ -269,10 +299,10 @@ contains
       real(8), allocatable :: rmin_grid(:)
       character(500) :: fname
 
-      call initiate_constants   
+      call initiate_constants
 
       ! Initial Lorentz factor
-      gamma = 1d8
+      gamma = 1d7
 
       ! Set field parameters
       !quadrant
@@ -310,6 +340,8 @@ contains
 
       rmin = 1d7
       xstart = -rmin*1d2
+      traj_file_name = "01_run/tgam_1e7_a10.dat"
+      spectrum_file_name = "01_run/spectrum.dat"
       y0 = initial_cond(gamma, cross_angle, nquad, branch, rmin, xstart)
       call calc_syst(y0)
 
@@ -403,7 +435,7 @@ contains
 
       write(*,*) "Solved with np = ", sol%np
       ! call sol%reduce_to_npoints(100000, sol_red)
-      ! call write_results(sol)
+      call write_results(sol)
 
    end subroutine calc_syst
 
@@ -414,12 +446,12 @@ contains
       type(ode_solution) :: sol_red
       real(8) :: bm(3), em(3)
       real(8) :: acc, loss, ec, loss_pr, acc_norm
-      character(500) :: fname(4)
+      character(500) :: fname
       logical :: start_write
 
-      fname(1)=trim(cwd_parent_dir(3))//'/results/data/traj_in_fff.dat'
-      write(*,*) "Trajectory saved in = ", trim(fname(1))
-      open(1, file=fname(1))
+      fname=trim(root_out_dir())//trim(traj_file_name)
+      write(*,*) "Trajectory saved in = ", trim(fname)
+      open(1, file=fname)
 
       write(1,'(A1, A39, 20A40)') "#", "Time", "X", "Y", "Z", "VX", "VY", "VZ", "Gamma",&
          "Ec", "Acc", "Loss", "Loss per rot", "Relative loss per rot", &
@@ -457,7 +489,7 @@ contains
       real(8), allocatable :: ec(:), gm(:), tm(:)
       real(8) :: acc1, loss1, ec1, loss_pr1, acc_norm
       integer :: i, ngam, nc
-      character(500) :: fname(4)
+      character(500) :: fname
 
       ngam = 100
       call ut%grid(egam, 1d6, 1d18, ngam,'log')
@@ -478,9 +510,9 @@ contains
 
       call int_spectr(ec, gm, tm, nc, egam, ngam, spectr)
 
-      fname(1)=trim(cwd_parent_dir(3))//'/results/data/spectr.dat'
-      write(*,*) "Spectrum saved in = ", trim(fname(1))
-      open(1,file=fname(1))
+      fname=trim(root_out_dir())//trim(spectrum_file_name)
+      write(*,*) "Spectrum saved in = ", trim(fname)
+      open(1,file=fname)
 
       do i = 1, ngam
          write(1,*) egam(i), dnde_const*spectr(i)
@@ -509,7 +541,7 @@ contains
       call ut%grid(xgrid,-cube_size,cube_size,nx,'lin')
       call ut%grid(ygrid,-cube_size,cube_size,ny,'lin')
 
-      fname = trim(cwd_parent_dir(3))//'/results/data/mag_field/bm_201.dat'
+      fname = trim(root_out_dir())//'mag_field/bm_201.dat'
       open(1, file=fname)
 
       do ix=1,nx
@@ -544,7 +576,7 @@ contains
       call ut%grid(ygrid,-cube_size,cube_size,ny,'lin')
       call ut%grid(zgrid,-cube_size,cube_size,nz,'lin')
 
-      fname = trim(cwd_parent_dir(3))//'/results/data/mag_field/bm_3d_dip.dat'
+      fname = trim(root_out_dir())//'mag_field/bm_3d_dip.dat'
       open(1, file=fname)
 
       do ix=1,nx
